@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#f6f2ec">
+<title>Nuestro salón · pruébalo</title>
+<style>
+  :root {
+    --fondo: #f6f2ec; --tarjeta: #fffdf9; --tinta: #2a2521; --suave: #6f665e; --linea: #e4dcd2;
+    --acento: #2a2521; --radio: 14px;
+    --serif: ui-serif, "New York", "Iowan Old Style", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--fondo); color: var(--tinta); font: 16px/1.45 var(--sans);
+         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  button { font: inherit; color: inherit; }
+  .app { max-width: 1240px; margin: 0 auto; padding: 14px 14px 40px; display: grid; gap: 18px; }
+  @media (min-width: 980px) {
+    .app { grid-template-columns: minmax(0, 1.55fr) minmax(330px, 1fr); align-items: start; padding-top: 24px; }
+    .visor-col { position: sticky; top: 16px; }
+  }
+  header h1 { font-family: var(--serif); font-weight: 600; font-size: 26px; line-height: 1.15; margin: 2px 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--suave); font-size: 15px; }
+
+  /* visor */
+  .marco { position: relative; border-radius: var(--radio); overflow: hidden; background: #d8d0c6;
+           aspect-ratio: 16 / 9; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 8px 24px rgba(60,40,20,.10); touch-action: pan-y; }
+  .marco canvas, .marco img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .marco img.antes { opacity: 0; transition: opacity .18s ease; pointer-events: none; }
+  .marco.ver-antes img.antes { opacity: 1; }
+  .cargando { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: 600;
+              background: rgba(40,30,20,.25); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .marco.carga .cargando { opacity: 1; }
+  .etq { position: absolute; left: 10px; top: 10px; background: rgba(25,20,16,.62); color: #fff; font-size: 13px;
+         font-weight: 600; padding: 4px 10px; border-radius: 999px; pointer-events: none; }
+  .flecha { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%;
+            border: 0; background: rgba(255,255,255,.88); box-shadow: 0 1px 6px rgba(0,0,0,.25); cursor: pointer;
+            display: grid; place-items: center; font-size: 22px; line-height: 1; }
+  .flecha.izq { left: 8px; } .flecha.der { right: 8px; }
+  .barra-visor { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .btn-antes { flex: 1 1 220px; min-height: 48px; border-radius: 12px; border: 1.5px solid var(--tinta); background: var(--tarjeta);
+               font-weight: 650; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: none; }
+  .btn-antes:active, .btn-antes.activo { background: var(--tinta); color: #fff; }
+  .miniaturas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+  .miniaturas button { padding: 0; border: 2px solid transparent; border-radius: 9px; overflow: hidden; background: #d8d0c6;
+                       aspect-ratio: 16 / 9; cursor: pointer; position: relative; }
+  .miniaturas button[aria-current="true"] { border-color: var(--tinta); }
+  .miniaturas canvas { width: 100%; height: 100%; display: block; }
+
+  /* panel */
+  .panel { display: grid; gap: 14px; }
+  .bloque { background: var(--tarjeta); border: 1px solid var(--linea); border-radius: var(--radio); padding: 14px; }
+  .bloque h2 { font-family: var(--serif); font-weight: 600; font-size: 19px; margin: 0 0 2px; }
+  .bloque .ayuda { margin: 0 0 12px; color: var(--suave); font-size: 14px; }
+  .muestras { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px 8px; }
+  .muestra { border: 0; background: none; padding: 0; cursor: pointer; text-align: center; min-width: 0; }
+  .muestra .pastilla { display: block; width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid rgba(0,0,0,.12);
+                       box-shadow: inset 0 0 0 3px transparent; }
+  .muestra[aria-pressed="true"] .pastilla { box-shadow: 0 0 0 3px var(--fondo), 0 0 0 5px var(--tinta); }
+  .muestra .nombre { display: block; font-size: 12px; line-height: 1.2; margin-top: 5px; color: var(--tinta); }
+  .muestra.otro .pastilla { background: conic-gradient(#c96, #9b6, #69b, #96b, #c96); position: relative; }
+  .muestra.otro input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  .elegido { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: var(--fondo); font-size: 14px; }
+  .elegido .pastilla { width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(0,0,0,.15); flex: none; }
+  .elegido b { font-weight: 650; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { min-height: 44px; padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--linea); background: var(--tarjeta);
+          cursor: pointer; font-size: 15px; }
+  .chip[aria-pressed="true"] { border-color: var(--tinta); background: var(--tinta); color: #fff; }
+  .chip:disabled { opacity: .45; cursor: default; }
+  .acento-colores { margin-top: 12px; }
+  .acento-colores[hidden] { display: none; }
+  .ideas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .idea { border: 1.5px solid var(--linea); background: var(--tarjeta); border-radius: 12px; padding: 10px; text-align: left; cursor: pointer; min-height: 64px; }
+  .idea .franjas { display: flex; height: 18px; border-radius: 6px; overflow: hidden; margin-bottom: 7px; border: 1px solid rgba(0,0,0,.1); }
+  .idea .franjas span { flex: 1; }
+  .idea b { display: block; font-size: 15px; font-weight: 650; }
+  .idea small { color: var(--suave); font-size: 12.5px; }
+  .compartir { width: 100%; min-height: 52px; border-radius: 12px; border: 0; background: #1f8f4e; color: #fff; font-weight: 700; font-size: 16px; cursor: pointer; }
+  .nota { color: var(--suave); font-size: 13px; margin: 8px 2px 0; }
+  :focus-visible { outline: 3px solid #3b82f6; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="visor-col">
+    <header>
+      <h1>Nuestro salón, sin gotelé</h1>
+      <p>Elige colores y decoración: las fotos de casa cambian al momento.</p>
+    </header>
+    <div style="height:12px"></div>
+    <div class="marco carga" id="marco">
+      <canvas id="lienzo" width="1280" height="720" aria-label="Foto del salón con el color elegido"></canvas>
+      <img class="antes" id="antes" alt="El salón como está ahora">
+      <span class="etq" id="etq">1 / 5</span>
+      <button class="flecha izq" id="prev" aria-label="Foto anterior">‹</button>
+      <button class="flecha der" id="next" aria-label="Foto siguiente">›</button>
+      <div class="cargando">Cargando…</div>
+    </div>
+    <div class="barra-visor">
+      <button class="btn-antes" id="btnAntes">Mantén pulsado para ver cómo está ahora</button>
+    </div>
+    <div class="miniaturas" id="minis"></div>
+  </div>
+
+  <div class="panel">
+    <section class="bloque" aria-labelledby="t-ideas">
+      <h2 id="t-ideas">Ideas rápidas</h2>
+      <p class="ayuda">Un toque y lo ves entero. Luego puedes cambiar lo que quieras.</p>
+      <div class="ideas" id="ideas"></div>
+    </section>
+
+    <section class="bloque" aria-labelledby="t-pared">
+      <h2 id="t-pared">Color de las paredes</h2>
+      <p class="ayuda">Para todo el salón. El techo se queda blanco.</p>
+      <div class="muestras" id="muestrasPared"></div>
+      <div class="elegido" id="elegidoPared"></div>
+    </section>
+
+    <section class="bloque" aria-labelledby="t-acento">
+      <h2 id="t-acento">Una pared de otro color</h2>
+      <p class="ayuda">Opcional. Marca una o varias y elige su color.</p>
+      <div class="chips" id="chipsAcento"></div>
+      <div class="acento-colores" id="acentoColores" hidden>
+        <div style="height:4px"></div>
+        <div class="muestras" id="muestrasAcento"></div>
+        <div class="elegido" id="elegidoAcento"></div>
+      </div>
+    </section>
+
+    <section class="bloque" aria-labelledby="t-deco">
+      <h2 id="t-deco">Decoración</h2>
+      <p class="ayuda" id="ayudaDeco">Muebles y textiles de ejemplo, generados sobre vuestras fotos sin mover paredes ni ventanas.</p>
+      <div class="chips" id="chipsDeco"></div>
+    </section>
+
+    <section class="bloque">
+      <button class="compartir" id="compartir">Enviar mi elección por WhatsApp</button>
+      <p class="nota">Simulación aproximada: el color real cambia con la luz de cada hora. Antes de comprar, pedid una muestra con el código (NCS) en la tienda de pinturas.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+"use strict";
+const VISTAS = [
+  {id: "f4", nombre: "Tele y aparador"},
+  {id: "f2", nombre: "Tele desde el comedor"},
+  {id: "f3", nombre: "Puertas y comedor"},
+  {id: "f1", nombre: "Comedor y ventana"},
+  {id: "f5", nombre: "Ventanales"},
+];
+const DECOS = [{"id": "actual", "nombre": "La de ahora", "lista": true}, {"id": "nordica", "nombre": "Nórdica cálida", "lista": false}, {"id": "natural", "nombre": "Natural con plantas", "lista": false}, {"id": "mediterranea", "nombre": "Mediterránea", "lista": false}, {"id": "elegante", "nombre": "Clásica elegante", "lista": false}];
+const COLORES = [
+  {hex: "#F3EDE5", nombre: "Blanco lino", ncs: "S 0502-Y50R"},
+  {hex: "#F3EFE3", nombre: "Blanco roto", ncs: "S 0502-Y"},
+  {hex: "#E3DDD6", nombre: "Greige claro", ncs: "S 1002-Y50R"},
+  {hex: "#E6D9CA", nombre: "Arena", ncs: "S 1005-Y50R"},
+  {hex: "#D9CDBD", nombre: "Piedra", ncs: "S 1505-Y40R"},
+  {hex: "#C9BFB2", nombre: "Topo claro", ncs: "S 2005-Y50R"},
+  {hex: "#C8C2BB", nombre: "Gris cálido", ncs: "S 2002-Y50R"},
+  {hex: "#BFC4AE", nombre: "Salvia clara", ncs: "S 2010-G50Y"},
+  {hex: "#A4AB93", nombre: "Salvia", ncs: "S 3010-G50Y"},
+  {hex: "#A2AF9C", nombre: "Eucalipto", ncs: "S 3010-G30Y"},
+  {hex: "#686C5A", nombre: "Verde oliva", ncs: "S 6010-G50Y"},
+  {hex: "#D2A68F", nombre: "Arcilla clara", ncs: "S 2020-Y60R"},
+  {hex: "#A77B65", nombre: "Arcilla tostada", ncs: "S 4020-Y60R"},
+  {hex: "#BF7E6A", nombre: "Terracota", ncs: "S 3030-Y70R"},
+  {hex: "#325965", nombre: "Azul petróleo", ncs: "S 6020-B10G"},
+  {hex: "#3C4D6B", nombre: "Azul noche", ncs: "S 6020-R80B"},
+  {hex: "#3D5057", nombre: "Pizarra", ncs: "S 7010-B10G"},
+];
+const PAREDES_ACENTO = [
+  {id: "tele", nombre: "Pared de la tele", etiqueta: 2},
+  {id: "comedor", nombre: "Pared del comedor", etiqueta: 3},
+  {id: "hueco", nombre: "Hueco del aparador", etiqueta: 4},
+];
+const IDEAS = [
+  {nombre: "Lino y roble", txt: "Blanco cálido, luminoso", pared: "#F3EDE5", acento: null, muros: [], deco: "nordica"},
+  {nombre: "Salvia", txt: "Verde suave en el comedor", pared: "#E3DDD6", acento: "#A4AB93", muros: ["comedor", "hueco"], deco: "natural"},
+  {nombre: "Arcilla", txt: "Cálido, tele en arcilla", pared: "#E6D9CA", acento: "#A77B65", muros: ["tele"], deco: "mediterranea"},
+  {nombre: "Atlántico", txt: "Azul petróleo en la tele", pared: "#F3EFE3", acento: "#325965", muros: ["tele"], deco: "elegante"},
+];
+const TECHO = "#F1EFEB";
+
+// ---------- estado (se guarda en la URL para poder compartirlo) ----------
+const estado = {vista: 0, pared: "#E3DDD6", acento: "#A4AB93", muros: [], deco: "actual"};
+function leerURL() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const hex = v => /^[0-9a-fA-F]{6}$/.test(v || "") ? "#" + v.toUpperCase() : null;
+  estado.pared = hex(q.get("p")) || estado.pared;
+  estado.acento = hex(q.get("a")) || estado.acento;
+  estado.muros = (q.get("m") || "").split(",").filter(m => PAREDES_ACENTO.some(p => p.id === m));
+  const d = q.get("d"); if (DECOS.some(x => x.id === d && x.lista)) estado.deco = d;
+  const v = +q.get("v"); if (v >= 1 && v <= VISTAS.length) estado.vista = v - 1;
+}
+function escribirURL() {
+  const q = new URLSearchParams({p: estado.pared.slice(1), a: estado.acento.slice(1), m: estado.muros.join(","), d: estado.deco, v: estado.vista + 1});
+  history.replaceState(null, "", "#" + q.toString());
+}
+
+// ---------- color ----------
+const aLin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const hexLin = h => [1, 3, 5].map(i => aLin(parseInt(h.slice(i, i + 2), 16)));
+const ENC = new Uint8ClampedArray(4096);
+for (let i = 0; i < 4096; i++) { const x = i / 4095; ENC[i] = Math.round(255 * (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055)); }
+const SOMBRA = new Float32Array(256);
+for (let i = 0; i < 256; i++) SOMBRA[i] = Math.pow(i / 255, 2) * 2.5;
+const GRANO = new Float32Array(4096);
+{ let s = 12345; const rnd = () => (s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for (let i = 0; i < 4096; i++) { const u = rnd() || 1e-6, v = rnd(); GRANO[i] = 1 + 0.006 * Math.sqrt(-2 * Math.log(u)) * Math.cos(6.2832 * v); } }
+
+// ---------- datos de imágenes ----------
+let META = {};
+const cache = new Map();   // clave -> Promise<{w,h,base,datos}>
+function cargarImg(src) {
+  return new Promise((ok, mal) => { const im = new Image(); im.decoding = "async"; im.onload = () => ok(im); im.onerror = () => mal(new Error(src)); im.src = src; });
+}
+function pixeles(im) {
+  const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
+  const x = c.getContext("2d", {willReadFrequently: true}); x.drawImage(im, 0, 0);
+  return x.getImageData(0, 0, c.width, c.height);
+}
+function par(vista, deco, mini) {
+  const id = `${vista}__${deco}`, clave = (mini ? "t_" : "") + id;
+  if (!cache.has(clave)) {
+    cache.set(clave, Promise.all([cargarImg(`d/${clave}.jpg`), cargarImg(`d/${clave}.png`)]).then(([a, b]) => {
+      const base = pixeles(a), datos = pixeles(b);
+      return {id, w: base.width, h: base.height, base: base.data, datos: datos.data};
+    }));
+  }
+  return cache.get(clave);
+}
+
+function coloresPara(id) {
+  const t = (META[id] && META[id].tinte) || [1, 1, 1];
+  const L = hexLin(estado.pared), A = hexLin(estado.acento), T = hexLin(TECHO);
+  const porEtiqueta = [L, L, L, L, L, T];
+  for (const m of estado.muros) { const p = PAREDES_ACENTO.find(x => x.id === m); if (p) porEtiqueta[p.etiqueta] = A; }
+  return porEtiqueta.map(c => [c[0] * t[0] * 4095, c[1] * t[1] * 4095, c[2] * t[2] * 4095]);
+}
+
+function pintar(ctx, p, salida) {
+  const {w, h, base, datos} = p, o = salida.data, cols = coloresPara(p.id);
+  for (let y = 0, i = 0; y < h; y++) {
+    const fila = (y & 63) << 6;
+    for (let x = 0; x < w; x++, i += 4) {
+      const a = datos[i + 1];
+      if (a === 0) { o[i] = base[i]; o[i + 1] = base[i + 1]; o[i + 2] = base[i + 2]; o[i + 3] = 255; continue; }
+      const c = cols[(datos[i + 2] / 40 + 0.5) | 0] || cols[1];
+      const s = SOMBRA[datos[i]] * GRANO[fila + (x & 63)];
+      let r = c[0] * s, g = c[1] * s, b = c[2] * s;
+      r = ENC[r > 4095 ? 4095 : r | 0]; g = ENC[g > 4095 ? 4095 : g | 0]; b = ENC[b > 4095 ? 4095 : b | 0];
+      if (a === 255) { o[i] = r; o[i + 1] = g; o[i + 2] = b; }
+      else { const k = a / 255; o[i] = base[i] + (r - base[i]) * k; o[i + 1] = base[i + 1] + (g - base[i + 1]) * k; o[i + 2] = base[i + 2] + (b - base[i + 2]) * k; }
+      o[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(salida, 0, 0);
+}
+
+// ---------- interfaz ----------
+const $ = s => document.querySelector(s);
+const lienzo = $("#lienzo"), ctx = lienzo.getContext("2d"), marco = $("#marco"), antes = $("#antes");
+const salidaGrande = ctx.createImageData(1280, 720);
+const minis = VISTAS.map((v, i) => {
+  const b = document.createElement("button"); b.setAttribute("aria-label", v.nombre);
+  const c = document.createElement("canvas"); c.width = 320; c.height = 180; b.appendChild(c);
+  b.onclick = () => irA(i); $("#minis").appendChild(b);
+  return {boton: b, ctx: c.getContext("2d"), salida: null};
+});
+
+let pendiente = false, version = 0;
+function redibujar() {
+  if (pendiente) return; pendiente = true;
+  requestAnimationFrame(async () => {
+    pendiente = false; const mia = ++version;
+    const v = VISTAS[estado.vista].id;
+    const decoActual = DECOS.find(d => d.id === estado.deco);
+    $("#etq").textContent = `${estado.vista + 1} / ${VISTAS.length} · ${VISTAS[estado.vista].nombre}`;
+    antes.src = `d/${v}__actual.jpg`;
+    marco.classList.add("carga");
+    try {
+      const p = await par(v, estado.deco, false);
+      if (mia !== version) return;
+      pintar(ctx, p, salidaGrande);
+    } catch (e) { console.error(e); }
+    marco.classList.remove("carga");
+    VISTAS.forEach(async (vv, i) => {
+      minis[i].boton.setAttribute("aria-current", i === estado.vista);
+      try {
+        const p = await par(vv.id, estado.deco, true);
+        if (mia !== version) return;
+        if (!minis[i].salida) minis[i].salida = minis[i].ctx.createImageData(p.w, p.h);
+        pintar(minis[i].ctx, p, minis[i].salida);
+      } catch (e) { console.error(e); }
+    });
+    escribirURL();
+    // precargar las fotos grandes del resto de vistas
+    VISTAS.forEach(vv => par(vv.id, estado.deco, false).catch(() => {}));
+  });
+}
+function irA(i) { estado.vista = (i + VISTAS.length) % VISTAS.length; redibujar(); }
+$("#prev").onclick = () => irA(estado.vista - 1);
+$("#next").onclick = () => irA(estado.vista + 1);
+// deslizar con el dedo
+let x0 = null;
+marco.addEventListener("pointerdown", e => { if (e.target.closest("button")) return; x0 = e.clientX; });
+marco.addEventListener("pointerup", e => { if (x0 === null) return; const dx = e.clientX - x0; x0 = null; if (Math.abs(dx) > 40) irA(estado.vista + (dx < 0 ? 1 : -1)); });
+window.addEventListener("keydown", e => { if (e.key === "ArrowRight") irA(estado.vista + 1); if (e.key === "ArrowLeft") irA(estado.vista - 1); });
+// ver cómo está ahora
+const btnAntes = $("#btnAntes");
+const ver = on => { marco.classList.toggle("ver-antes", on); btnAntes.classList.toggle("activo", on); };
+btnAntes.addEventListener("pointerdown", e => { e.preventDefault(); ver(true); });
+["pointerup", "pointerleave", "pointercancel"].forEach(t => btnAntes.addEventListener(t, () => ver(false)));
+btnAntes.addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") ver(true); });
+btnAntes.addEventListener("keyup", () => ver(false));
+btnAntes.addEventListener("contextmenu", e => e.preventDefault());
+
+function infoColor(hex) { return COLORES.find(c => c.hex === hex) || {hex, nombre: "Color a medida", ncs: hex}; }
+function muestras(cont, clave, alElegir) {
+  cont.innerHTML = "";
+  for (const c of COLORES) {
+    const b = document.createElement("button"); b.className = "muestra"; b.dataset.hex = c.hex;
+    b.innerHTML = `<span class="pastilla" style="background:${c.hex}"></span><span class="nombre">${c.nombre}</span>`;
+    b.onclick = () => alElegir(c.hex); cont.appendChild(b);
+  }
+  const o = document.createElement("label"); o.className = "muestra otro";
+  o.innerHTML = `<span class="pastilla"><input type="color" aria-label="Elegir otro color"></span><span class="nombre">Otro color</span>`;
+  const inp = o.querySelector("input"); inp.value = estado[clave];
+  inp.addEventListener("input", () => alElegir(inp.value.toUpperCase()));
+  cont.appendChild(o);
+}
+function marcar(cont, hex) { cont.querySelectorAll(".muestra[data-hex]").forEach(b => b.setAttribute("aria-pressed", b.dataset.hex === hex)); }
+function textoElegido(cont, hex, titulo) {
+  const c = infoColor(hex);
+  cont.innerHTML = `<span class="pastilla" style="background:${hex}"></span><span>${titulo}: <b>${c.nombre}</b> · ${c.ncs}</span>`;
+}
+function refrescarPanel() {
+  marcar($("#muestrasPared"), estado.pared); textoElegido($("#elegidoPared"), estado.pared, "Paredes");
+  marcar($("#muestrasAcento"), estado.acento); textoElegido($("#elegidoAcento"), estado.acento, "Pared destacada");
+  $("#acentoColores").hidden = estado.muros.length === 0;
+  $("#chipsAcento").querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", estado.muros.includes(b.dataset.id)));
+  $("#chipsDeco").querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === estado.deco));
+}
+muestras($("#muestrasPared"), "pared", hex => { estado.pared = hex; refrescarPanel(); redibujar(); });
+muestras($("#muestrasAcento"), "acento", hex => { estado.acento = hex; refrescarPanel(); redibujar(); });
+for (const p of PAREDES_ACENTO) {
+  const b = document.createElement("button"); b.className = "chip"; b.dataset.id = p.id; b.textContent = p.nombre;
+  b.onclick = () => { const i = estado.muros.indexOf(p.id); if (i >= 0) estado.muros.splice(i, 1); else estado.muros.push(p.id); refrescarPanel(); redibujar(); };
+  $("#chipsAcento").appendChild(b);
+}
+for (const d of DECOS) {
+  const b = document.createElement("button"); b.className = "chip"; b.dataset.id = d.id; b.textContent = d.nombre;
+  b.disabled = !d.lista; if (!d.lista) b.title = "Preparándose";
+  b.onclick = () => { estado.deco = d.id; refrescarPanel(); redibujar(); };
+  $("#chipsDeco").appendChild(b);
+}
+for (const idea of IDEAS) {
+  const b = document.createElement("button"); b.className = "idea";
+  const franjas = [idea.pared, idea.pared, idea.acento || idea.pared].map(c => `<span style="background:${c}"></span>`).join("");
+  b.innerHTML = `<span class="franjas">${franjas}</span><b>${idea.nombre}</b><small>${idea.txt}</small>`;
+  b.onclick = () => {
+    estado.pared = idea.pared; if (idea.acento) estado.acento = idea.acento; estado.muros = [...idea.muros];
+    if (DECOS.some(d => d.id === idea.deco && d.lista)) estado.deco = idea.deco;
+    refrescarPanel(); redibujar();
+  };
+  $("#ideas").appendChild(b);
+}
+$("#compartir").onclick = () => {
+  const p = infoColor(estado.pared), a = infoColor(estado.acento), d = DECOS.find(x => x.id === estado.deco);
+  const muros = estado.muros.map(m => PAREDES_ACENTO.find(x => x.id === m).nombre.toLowerCase());
+  let txt = `Me gusta así el salón:\n• Paredes: ${p.nombre} (${p.ncs})`;
+  if (muros.length) txt += `\n• ${muros.join(" y ")}: ${a.nombre} (${a.ncs})`;
+  txt += `\n• Decoración: ${d ? d.nombre : "actual"}\n${location.href}`;
+  location.href = "https://wa.me/?text=" + encodeURIComponent(txt);
+};
+
+leerURL();
+refrescarPanel();
+fetch("d/meta.json").then(r => r.json()).then(m => { META = m; redibujar(); }).catch(() => redibujar());
+</script>
+</body>
+</html>
