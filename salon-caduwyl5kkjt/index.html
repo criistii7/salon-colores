@@ -218,22 +218,28 @@ const GRANO = new Float32Array(4096);
 
 // ---------- datos de imágenes ----------
 let META = {};
-const cache = new Map();   // clave -> Promise<{w,h,base,datos}>
+const cache = new Map();   // clave -> Promise<{w,h,base,masc,somb}>
+const listos = new Set();  // claves ya descargadas y decodificadas
 function cargarImg(src) {
   return new Promise((ok, mal) => { const im = new Image(); im.decoding = "async"; im.onload = () => ok(im); im.onerror = () => mal(new Error(src)); im.src = src; });
 }
-function pixeles(im) {
-  const c = document.createElement("canvas"); c.width = im.naturalWidth; c.height = im.naturalHeight;
-  const x = c.getContext("2d", {willReadFrequently: true}); x.drawImage(im, 0, 0);
+function pixeles(im, w, h) {
+  const c = document.createElement("canvas"); c.width = w || im.naturalWidth; c.height = h || im.naturalHeight;
+  const x = c.getContext("2d", {willReadFrequently: true});
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = "high";
+  x.drawImage(im, 0, 0, c.width, c.height);
   return x.getImageData(0, 0, c.width, c.height);
 }
+// foto (.jpg) + máscara exacta (_m.png: R alfa, G etiqueta) + sombra suave a media resolución (_s.jpg)
 function par(vista, deco, mini) {
   const id = `${vista}__${deco}`, clave = (mini ? "t_" : "") + id;
   if (!cache.has(clave)) {
-    cache.set(clave, Promise.all([cargarImg(`d/${clave}.jpg`), cargarImg(`d/${clave}.png`)]).then(([a, b]) => {
-      const base = pixeles(a), datos = pixeles(b);
-      return {id, w: base.width, h: base.height, base: base.data, datos: datos.data};
-    }));
+    const p = Promise.all([cargarImg(`d/${clave}.jpg`), cargarImg(`d/${clave}_m.png`), cargarImg(`d/${clave}_s.jpg`)]).then(([a, m, s]) => {
+      const base = pixeles(a), w = base.width, h = base.height;
+      return {id, w, h, base: base.data, masc: pixeles(m).data, somb: pixeles(s, w, h).data};
+    });
+    p.then(() => listos.add(clave), () => cache.delete(clave));
+    cache.set(clave, p);
   }
   return cache.get(clave);
 }
@@ -247,14 +253,14 @@ function coloresPara(id) {
 }
 
 function pintar(ctx, p, salida) {
-  const {w, h, base, datos} = p, o = salida.data, cols = coloresPara(p.id);
+  const {w, h, base, masc, somb} = p, o = salida.data, cols = coloresPara(p.id);
   for (let y = 0, i = 0; y < h; y++) {
     const fila = (y & 63) << 6;
     for (let x = 0; x < w; x++, i += 4) {
-      const a = datos[i + 1];
+      const a = masc[i];
       if (a === 0) { o[i] = base[i]; o[i + 1] = base[i + 1]; o[i + 2] = base[i + 2]; o[i + 3] = 255; continue; }
-      const c = cols[(datos[i + 2] / 40 + 0.5) | 0] || cols[1];
-      const s = SOMBRA[datos[i]] * GRANO[fila + (x & 63)];
+      const c = cols[(masc[i + 1] / 40 + 0.5) | 0] || cols[1];
+      const s = SOMBRA[somb[i]] * GRANO[fila + (x & 63)];
       let r = c[0] * s, g = c[1] * s, b = c[2] * s;
       r = ENC[r > 4095 ? 4095 : r | 0]; g = ENC[g > 4095 ? 4095 : g | 0]; b = ENC[b > 4095 ? 4095 : b | 0];
       if (a === 255) { o[i] = r; o[i + 1] = g; o[i + 2] = b; }
@@ -277,33 +283,36 @@ const minis = VISTAS.map((v, i) => {
 });
 
 let pendiente = false, version = 0;
+const firmaMini = new Array(VISTAS.length).fill("");
+function firmaEstado() { return [estado.pared, estado.acento, estado.muros.join(","), estado.deco].join("|"); }
 function redibujar() {
   if (pendiente) return; pendiente = true;
   requestAnimationFrame(async () => {
-    pendiente = false; const mia = ++version;
+    pendiente = false; const mia = ++version, firma = firmaEstado();
     const v = VISTAS[estado.vista].id;
-    const decoActual = DECOS.find(d => d.id === estado.deco);
     $("#etq").textContent = `${estado.vista + 1} / ${VISTAS.length} · ${VISTAS[estado.vista].nombre}`;
     antes.src = `d/${v}__actual.jpg`;
-    marco.classList.add("carga");
-    try {
-      const p = await par(v, estado.deco, false);
-      if (mia !== version) return;
-      pintar(ctx, p, salidaGrande);
-    } catch (e) { console.error(e); }
-    marco.classList.remove("carga");
+    escribirURL();
+    // miniaturas: cada una se pinta en cuanto llegan sus datos, sin esperar a la foto grande
     VISTAS.forEach(async (vv, i) => {
       minis[i].boton.setAttribute("aria-current", i === estado.vista);
+      if (firmaMini[i] === firma) return;
       try {
         const p = await par(vv.id, estado.deco, true);
-        if (mia !== version) return;
+        if (firma !== firmaEstado()) return;
         if (!minis[i].salida) minis[i].salida = minis[i].ctx.createImageData(p.w, p.h);
-        pintar(minis[i].ctx, p, minis[i].salida);
+        pintar(minis[i].ctx, p, minis[i].salida); firmaMini[i] = firma;
       } catch (e) { console.error(e); }
     });
-    escribirURL();
-    // precargar las fotos grandes del resto de vistas
-    VISTAS.forEach(vv => par(vv.id, estado.deco, false).catch(() => {}));
+    if (!listos.has(`${v}__${estado.deco}`)) marco.classList.add("carga");
+    try {
+      const p = await par(v, estado.deco, false);
+      if (mia === version) pintar(ctx, p, salidaGrande);
+    } catch (e) { console.error(e); }
+    if (mia === version) marco.classList.remove("carga");
+    // precargar las demás fotos grandes de una en una, empezando por las vecinas
+    const orden = [1, -1, 2, -2].map(d => (estado.vista + d + VISTAS.length) % VISTAS.length);
+    for (const j of orden) { try { await par(VISTAS[j].id, estado.deco, false); } catch (e) {} }
   });
 }
 function irA(i) { estado.vista = (i + VISTAS.length) % VISTAS.length; redibujar(); }
