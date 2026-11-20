@@ -73,6 +73,8 @@
           cursor: pointer; font-size: 15px; }
   .chip[aria-pressed="true"] { border-color: var(--tinta); background: var(--tinta); color: #fff; }
   .chip:disabled { opacity: .45; cursor: default; }
+  .desc-deco { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--fondo); font-size: 14px; }
+  .desc-deco:empty { display: none; }
   .acento-colores { margin-top: 12px; }
   .acento-colores[hidden] { display: none; }
   .ideas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -136,8 +138,9 @@
 
     <section class="bloque" aria-labelledby="t-deco">
       <h2 id="t-deco">Decoración</h2>
-      <p class="ayuda" id="ayudaDeco">Muebles y textiles de ejemplo, generados sobre vuestras fotos sin mover paredes ni ventanas.</p>
+      <p class="ayuda" id="ayudaDeco">Ideas de muebles y textiles generadas con IA sobre vuestras fotos, con las mismas paredes, ventanas y suelo. Son orientativas: sirven para ver el ambiente.</p>
       <div class="chips" id="chipsDeco"></div>
+      <p class="desc-deco" id="descDeco"></p>
     </section>
 
     <section class="bloque">
@@ -156,7 +159,7 @@ const VISTAS = [
   {id: "f1", nombre: "Comedor y ventana"},
   {id: "f5", nombre: "Ventanales"},
 ];
-const DECOS = [{"id": "actual", "nombre": "La de ahora", "lista": true}, {"id": "nordica", "nombre": "Nórdica cálida", "lista": false}, {"id": "natural", "nombre": "Natural con plantas", "lista": false}, {"id": "mediterranea", "nombre": "Mediterránea", "lista": false}, {"id": "elegante", "nombre": "Clásica elegante", "lista": false}];
+const DECOS = [{"id": "actual", "nombre": "La de ahora", "txt": "Vuestros muebles de siempre: solo cambia la pintura.", "lista": true}, {"id": "nordica", "nombre": "Nórdica cálida", "txt": "Sofá de lino gris claro, mesa y sillas de roble claro, lámpara de papel, alfombra crema, visillos blancos y un olivo.", "lista": true}, {"id": "natural", "nombre": "Natural con plantas", "txt": "Sofá color arena con cojines verde oliva y teja, madera clara y ratán, alfombra de yute y muchas plantas.", "lista": false}, {"id": "mediterranea", "nombre": "Mediterránea", "txt": "Sofá crema de borreguito con cojines terracota, mesa de travertino, cerámica artesanal, lámpara de yute y sillas de rejilla.", "lista": false}, {"id": "elegante", "nombre": "Clásica elegante", "txt": "Sofá de terciopelo verde, mesa de centro de mármol, muebles de nogal, lámpara de cristal y latón y alfombra estampada.", "lista": false}];
 const COLORES = [
   {hex: "#F3EDE5", nombre: "Blanco lino", ncs: "S 0502-Y50R"},
   {hex: "#F3EFE3", nombre: "Blanco roto", ncs: "S 0502-Y"},
@@ -357,6 +360,8 @@ function refrescarPanel() {
   $("#acentoColores").hidden = estado.muros.length === 0;
   $("#chipsAcento").querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", estado.muros.includes(b.dataset.id)));
   $("#chipsDeco").querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", b.dataset.id === estado.deco));
+  const d = DECOS.find(x => x.id === estado.deco);
+  $("#descDeco").textContent = d && d.txt ? d.txt : "";
 }
 muestras($("#muestrasPared"), "pared", hex => { estado.pared = hex; refrescarPanel(); redibujar(); });
 muestras($("#muestrasAcento"), "acento", hex => { estado.acento = hex; refrescarPanel(); redibujar(); });
